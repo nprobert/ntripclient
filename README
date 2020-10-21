@@ -1,4 +1,22 @@
 ----------------------------------------------------------------------
+          NTRIP Client for J2735 RTCM Message generation
+----------------------------------------------------------------------
+This code has been modified to encode J2735 RTCM Message for forwarding
+RTCM corrections to an RSU from a CORS station.
+
+A RoadSide Unit (RSU) is configured to forward these messages OTA over
+DSRC or C-V2X based communications for V2X.
+
+See the -U and -V options below.
+
+This also requires the https://github.com/nprobert/libj2735v2016 library
+to be built first.
+
+--|-- libj2735v2016
+  |
+  |-- ntripclient
+
+----------------------------------------------------------------------
                 NTRIP Client for POSIX systems
 ----------------------------------------------------------------------
 
@@ -104,6 +122,10 @@ Serial input/output:
  -A --databits   databits for serial device
  -l --serlogfile logfile for serial data
 
+UDP J2735 output:
+ -U --rsuhost   host for receiving J2735 RTCM message
+ -V --rsuport   port on host for receiving J2735 RTCM message
+ 
 The argument '-h' will cause a HELP on the screen.
 Without any argument ntripclient will provide the a table of
 available resources (sourcetable).

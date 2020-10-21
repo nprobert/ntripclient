@@ -91,7 +91,13 @@ struct Args
   enum SerialProtocol protocol;
   const char *serdevice;
   const char *serlogfile;
+  
+  const char *rsuhost;
+  const char *rsuport;
 };
+
+extern int udp_client(const char *host, const char *service);
+extern int rsu_send(int sock, const char *buf, int n);
 
 /* option parsing */
 #ifdef NO_LONG_OPTS
@@ -119,10 +125,12 @@ static struct option opts[] = {
 { "parity",     required_argument, 0, 'Y'},
 { "databits",   required_argument, 0, 'A'},
 { "serlogfile", required_argument, 0, 'l'},
+{ "rsuhost",    required_argument, 0, 'U'},
+{ "rsuport",    required_argument, 0, 'V'},
 { "help",       no_argument,       0, 'h'},
 {0,0,0,0}};
 #endif
-#define ARGOPT "-d:m:bhp:r:s:u:n:S:R:M:IP:D:B:T:C:Y:A:l:"
+#define ARGOPT "-d:m:bhp:r:s:u:n:S:R:M:IP:D:B:T:C:Y:A:l:U:V:"
 
 int stop = 0;
 #ifndef WINDOWSVERSION
@@ -333,6 +341,8 @@ static int getargs(int argc, char **argv, struct Args *args)
   args->baud = SPABAUD_9600;
   args->serdevice = 0;
   args->serlogfile = 0;
+  args->rsuhost = NULL;
+  args->rsuport = NULL;
   help = 0;
 
   do
@@ -450,6 +460,8 @@ static int getargs(int argc, char **argv, struct Args *args)
         res = 0;
       }
       break;
+    case 'U': args->rsuhost = optarg; break;
+    case 'V': args->rsuport = optarg; break;
     case 1:
       {
         const char *err;
@@ -509,6 +521,9 @@ static int getargs(int argc, char **argv, struct Args *args)
     " -Y " LONG_OPT("--parity     ") "parity for serial device\n"
     " -A " LONG_OPT("--databits   ") "databits for serial device\n"
     " -l " LONG_OPT("--serlogfile ") "logfile for serial data\n"
+    "\nUDP J2735 output:\n"
+    " -U " LONG_OPT("--rsuhost ") "host for UDP output to RSU\n"
+    " -V " LONG_OPT("--rsuport ") "port for UDP output to RSU\n"
     , revisionstr, datestr, argv[0], argv[0]);
     exit(1);
   }
@@ -583,9 +598,21 @@ int main(int argc, char **argv)
     return 20;
   }
 #endif
-
+  int rsusock = -1;
+  
   if(getargs(argc, argv, &args))
   {
+    // UDP port to RSU
+    if(args.rsuport && args.rsuhost)
+    {
+      // UDP socket to RSU
+      rsusock = udp_client(args.rsuhost, args.rsuport);
+      if (rsusock<0) {
+          fprintf(stderr, "Could not open UDP Port.\n");
+          return 20;
+      }
+    }
+
     struct serial sx;
     FILE *ser = 0;
     char nmeabuffer[200] = "$GPGGA,"; /* our start string */
@@ -707,7 +734,7 @@ int main(int argc, char **argv)
         {
           unsigned int session;
           int tim, seq, init;
-          char rtpbuf[1526];
+          char rtpbuf[2000];
           int i=12, j;
 
           init = time(0);
@@ -1516,9 +1543,9 @@ int main(int argc, char **argv)
                     if(i < numbytes-l)
                       chunkymode = 1;
                   }
-                  else if(!strstr(buf, "ICY 200 OK"))
+                  else if(!strstr(buf, "ICY 200 OK") && !strstr(buf, "SOURCETABLE 200 OK"))
                   {
-                    fprintf(stderr, "Could not get the requested data: ");
+                    fprintf(stderr, "Could not get the requested data: %s\t", buf);
                     for(k = 0; k < numbytes && buf[k] != '\n' && buf[k] != '\r'; ++k)
                     {
                       fprintf(stderr, "%c", isprint(buf[k]) ? buf[k] : '.');
@@ -1589,6 +1616,23 @@ int main(int argc, char **argv)
                             ofs += j;
                         }
                       }
+                      else if (rsusock>=0)
+                      {
+                        int ofs = 0;
+                        while(i > ofs && !stop && !error)
+                        {
+                          // encode & send
+                          int j = rsu_send(rsusock, buf+pos+ofs, i-ofs);
+                          
+                          if (j <= 0)
+                          {
+                            fprintf(stderr, "RSU encode or send failed\n");
+                            stop = error = 1;
+                          }
+                          else
+                            ofs += j;
+                        }                      
+                      }
                       else
                         fwrite(buf+pos, (size_t)i, 1, stdout);
                       totalbytes += i;
@@ -1621,6 +1665,23 @@ int main(int argc, char **argv)
                       {
                         fprintf(stderr, "Could not access serial device\n");
                         stop = 1;
+                      }
+                      else
+                        ofs += i;
+                    }
+                  }
+                  else if (rsusock>=0)
+                  {
+                    int ofs = 0;
+                    while(numbytes > ofs && !stop && !error)
+                    {
+                      // encode & send
+                      int i = rsu_send(rsusock, buf+ofs, numbytes-ofs);
+                      
+                      if (i <= 0)
+                      {
+                        fprintf(stderr, "RSU encoding or send failed\n");
+                        stop = error = 1;
                       }
                       else
                         ofs += i;
