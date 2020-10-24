@@ -8,19 +8,24 @@ OPTS = -Wall -W -O3 -DWINDOWSVERSION
 LIBS = -lwsock32
 else
 #OPTS = -Wall -W -O3 -I../libj2735v2016/src
-OPTS = -DCAMP_DENSO_WSU -Wall -W -I../libj2735v2016/src
+OPTS = -Wall -W -I../libj2735v2016/src
 endif
 
 SRC=rsu_send.c j2735_encode.c udp_socket.c
 
+ALL: ntripclient ntripclient_wsu
+
 ntripclient: ntripclient.c $(SRC)
-	$(CC) $(OPTS) ntripclient.c $(SRC) -I../libj2735v2016/src -o $@ ../libj2735v2016/libj2735v2016.a $(LIBS)
+	$(CC) -o $@ $(OPTS) ntripclient.c $(SRC) -I../libj2735v2016/src -o $@ ../libj2735v2016/libj2735v2016.a $(LIBS)
+
+ntripclient_wsu: ntripclient.c $(SRC)
+	$(CC) -o $@ $(OPTS) -DCAMP_DENSO_WSU ntripclient.c $(SRC) -I../libj2735v2016/src -o $@ ../libj2735v2016/libj2735v2016.a $(LIBS)
 
 test_encode: test_encode.c $(SRC)
 	$(CC) $(OPTS) test_encode.c $(SRC) -I../libj2735v2016/src -o $@ ../libj2735v2016/libj2735v2016.a $(LIBS)
 
 clean:
-	$(RM) ntripclient core*
+	$(RM) ntripclient ntripclient_wsu test_encode core*
 
 archive:
 	zip -9 ntripclient.zip ntripclient.c makefile README serial.c

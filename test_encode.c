@@ -12,6 +12,7 @@ extern int rsu_send(int sock, const char *buf, int num);
 int main(int argc, char **argv)
 {
   char buf[2000];
+  memset(buf, 0x5a, sizeof(buf));
   int i;
   
   for(i=0; i<1100; i+=256) {
